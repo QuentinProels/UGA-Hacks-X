@@ -28,19 +28,19 @@ def compute_sdf(mesh, grid_size=64):
     return sdf_values
 
 # Load STL and compute SDF
-mesh = trimesh.load_mesh("C:\Hackathon\BH_10x5_37.stl")
+mesh = trimesh.load_mesh("stls/BH_10x5_37.stl")
 mesh.apply_translation(-mesh.centroid) 
 sdf_grid = compute_sdf(mesh, grid_size=64)
 
 # Save the SDF for future use
-np.save("C:\Hackathon\sdf.npy", sdf_grid)
+np.save("stls/sdf.npy", sdf_grid)
 
 print("SDF computed and saved as 'sdf.npy'.")
 print("Negative values in SDF:", np.any(sdf_grid < 0))
 
 
 # Load the saved SDF
-sdf_grid = np.load("C:\Hackathon\sdf.npy")
+sdf_grid = np.load("stls/sdf.npy")
 
 # Apply Marching Cubes to extract the surface
 verts, faces, _, _ = skimage.measure.marching_cubes(sdf_grid, level=0)
@@ -49,6 +49,6 @@ verts, faces, _, _ = skimage.measure.marching_cubes(sdf_grid, level=0)
 mesh = trimesh.Trimesh(vertices=verts, faces=faces)
 
 # Export the reconstructed mesh as STL
-mesh.export("C:\Hackathon\reconstructed.stl")
+mesh.export("stls/reconstructed.stl")
 
 print("Reconstructed STL saved as 'reconstructed.stl'")
