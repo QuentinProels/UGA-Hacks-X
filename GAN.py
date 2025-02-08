@@ -3,8 +3,13 @@ import numpy as np
 import torch
 import os
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
+print(f"GPU available: {torch.cuda.is_available()}")
+print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 # Directory containing STL files
-directory = "stls"
+directory = "dataset"
+size = 16
 
 # List to store voxelized tensors
 tensor_list = []
@@ -12,21 +17,19 @@ tensor_list = []
 count = 1
 
 for i in os.listdir(directory):
-    if i.endswith(".stl"):
+    if i.endswith(".npy"):
         print(f"Processing {count}: {i}")
         count += 1
 
         # Load STL mesh
         file_path = os.path.join(directory, i)
-        mesh = trimesh.load_mesh(file_path)
 
         # Convert mesh to voxel grid
-        voxelized = trimesh.voxel.creation.voxelize(mesh, pitch=1)
 
-        voxel_array = voxelized.matrix.astype(np.float32)  # Ensure float format
+        voxel_array = np.load(file_path)  # Ensure float format
 
         # Check and pad/resize if necessary
-        target_size = (32, 32, 32)  # Adjust based on your model
+        target_size = (size, size, size)  # Adjust based on your model
         current_shape = voxel_array.shape
 
         if current_shape != target_size:
@@ -53,13 +56,13 @@ class Generator3D(nn.Module):
             nn.ReLU(),
             nn.Linear(512, 1024),
             nn.ReLU(),
-            nn.Linear(1024, 32 * 32 * 32),  # Output voxel grid size
+            nn.Linear(1024, size * size * size),  # Output voxel grid size
             nn.Tanh()  # Normalize output between -1 and 1
         )
 
     def forward(self, z):
         x = self.model(z)
-        return x.view(-1, 1, 32, 32, 32)  # Reshape to 3D volume
+        return x.view(-1, 1, size, size, size)  # Reshape to 3D volume
 
 
 class Discriminator3D(nn.Module):
@@ -67,7 +70,7 @@ class Discriminator3D(nn.Module):
         super(Discriminator3D, self).__init__()
         self.model = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(32 * 32 * 32, 1024),
+            nn.Linear(size * size * size, 1024),
             nn.LeakyReLU(0.2),
             nn.Linear(1024, 512),
             nn.LeakyReLU(0.2),
@@ -84,7 +87,9 @@ import torch.optim as optim
 # Set up models
 latent_dim = 200
 generator = Generator3D(latent_dim)
+#generator.to(device)
 discriminator = Discriminator3D()
+#discriminator.to(device)
 
 # Set up optimizers
 optimizer_G = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
@@ -97,33 +102,93 @@ criterion = nn.BCELoss()
 epochs = 1000
 batch_size = 16
 
-for epoch in range(epochs):
-    # Sample random noise
-    z = torch.randn(batch_size, latent_dim)
-    fake_data = generator(z)
-    
-    # Get real samples from dataset
-    real_data = voxel_data[:batch_size]  # Assuming enough data exists
+# Directory for saving models
+save_dir = "checkpoints"
+os.makedirs(save_dir, exist_ok=True)
 
-    # Train Discriminator
-    optimizer_D.zero_grad()
-    real_labels = torch.ones(batch_size, 1)
-    fake_labels = torch.zeros(batch_size, 1)
+# Function to save the model state
+def save_checkpoint(epoch, generator, discriminator, optimizer_G, optimizer_D):
+    checkpoint_path = f"{save_dir}/gan_checkpoint_{epoch}.pth"
+    checkpoint = {
+        'epoch': epoch,
+        'generator_state_dict': generator.state_dict(),
+        'discriminator_state_dict': discriminator.state_dict(),
+        'optimizer_G_state_dict': optimizer_G.state_dict(),
+        'optimizer_D_state_dict': optimizer_D.state_dict(),
+    }
+    torch.save(checkpoint, checkpoint_path)
+    print(f"Checkpoint saved at {checkpoint_path}")
 
-    real_loss = criterion(discriminator(real_data), real_labels)
-    fake_loss = criterion(discriminator(fake_data.detach()), fake_labels)
-    d_loss = real_loss + fake_loss
-    d_loss.backward()
-    optimizer_D.step()
 
-    # Train Generator
-    optimizer_G.zero_grad()
-    g_loss = criterion(discriminator(fake_data), real_labels)  # Want to fool D
-    g_loss.backward()
-    optimizer_G.step()
+# Function to load the latest checkpoint
+def load_checkpoint(generator, discriminator, optimizer_G, optimizer_D):
+    checkpoint_files = [f for f in os.listdir(save_dir) if f.startswith("gan_checkpoint_") and f.endswith(".pth")]
 
-    if epoch % 100 == 0:
-        print(f"Epoch {epoch}: D Loss: {d_loss.item()}, G Loss: {g_loss.item()}")
+    if not checkpoint_files:
+        print("🛠 No checkpoint found, starting from scratch.")
+        return 0  # Start training from epoch 0
+
+    # Find the latest checkpoint based on epoch number
+    latest_checkpoint = max(checkpoint_files, key=lambda x: int(x.split("_")[-1].split(".")[0]))
+    latest_epoch = int(latest_checkpoint.split("_")[-1].split(".")[0])
+
+    checkpoint_path = os.path.join(save_dir, latest_checkpoint)
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    generator.load_state_dict(checkpoint['generator_state_dict'])
+    discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+    optimizer_G.load_state_dict(checkpoint['optimizer_G_state_dict'])
+    optimizer_D.load_state_dict(checkpoint['optimizer_D_state_dict'])
+
+    print(f"Resumed training from checkpoint: {checkpoint_path} (Epoch {latest_epoch + 1})")
+    return latest_epoch + 1  # Resume from the next epoch
+
+
+# Example usage before training starts
+checkpoint_path = "checkpoints/gan_checkpoint_900.pth"  # Change to the latest checkpoint
+start_epoch = load_checkpoint(generator, discriminator, optimizer_G, optimizer_D)
+
+
+# If final checkpoint exists, skip training
+if start_epoch >= epochs:
+    print("Training is already complete. Skipping training...")
+else:
+    print(f"Starting training from epoch {start_epoch}...")
+
+    # Training loop
+    batch_size = 16
+    for epoch in range(start_epoch, epochs):
+        # Sample random noise
+        z = torch.randn(batch_size, latent_dim)
+        fake_data = generator(z)
+        
+        # Get real samples from dataset
+        real_data = voxel_data[:batch_size]  # Ensure enough data exists
+
+        # Train Discriminator
+        optimizer_D.zero_grad()
+        real_labels = torch.ones(batch_size, 1)
+        fake_labels = torch.zeros(batch_size, 1)
+
+        real_loss = criterion(discriminator(real_data), real_labels)
+        fake_loss = criterion(discriminator(fake_data.detach()), fake_labels)
+        d_loss = real_loss + fake_loss
+        d_loss.backward()
+        optimizer_D.step()
+
+        # Train Generator
+        optimizer_G.zero_grad()
+        g_loss = criterion(discriminator(fake_data), real_labels)  # Want to fool D
+        g_loss.backward()
+        optimizer_G.step()
+
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch}: D Loss: {d_loss.item()}, G Loss: {g_loss.item()}")
+            save_checkpoint(epoch, generator, discriminator, optimizer_G, optimizer_D)
+
+    # Final checkpoint after completion
+    save_checkpoint(epochs - 1, generator, discriminator, optimizer_G, optimizer_D)
+    print("Training completed and final model saved!")
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
