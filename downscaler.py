@@ -1,8 +1,22 @@
 import os
 import scipy.ndimage
 import numpy as np
+import cv2
+def resize_voxel_cv(voxel_array, scale_factor):
 
+    voxel_array = voxel_array.astype(np.float32)
+    # Rescale each dimension separately with cubic interpolation
+    new_shape = (int(voxel_array.shape[0] * scale_factor), 
+                 int(voxel_array.shape[1] * scale_factor),
+                 int(voxel_array.shape[2] * scale_factor))
 
+    # Resize each slice (z-axis) individually
+    resized_voxel = np.stack([
+        cv2.resize(voxel_array[z], (new_shape[1], new_shape[2]), interpolation=cv2.INTER_CUBIC)
+        for z in range(voxel_array.shape[0])
+    ], axis=0)
+    
+    return resized_voxel
 
 def resize_voxel(directory, output_size):
     size = output_size
@@ -31,6 +45,15 @@ def resize_voxel(directory, output_size):
             os.makedirs(output_directory, exist_ok=True)
             file_path = os.path.join(directory, i)
             voxel_array = np.load(file_path) 
-            resized_voxel_array = scipy.ndimage.zoom(voxel_array, scale_factor, order = 1)
+            #resized_voxel_array = scipy.ndimage.zoom(voxel_array, (scale_factor, scale_factor, scale_factor), order = 5)
+            #resized_voxel_array = np.clip(resized_voxel_array, 0, 1)
+
+            resized_voxel_array = resize_voxel_cv(voxel_array, scale_factor)
+
+
+
             output_path = os.path.join(f"rescaled_{directory}", i)
             np.save(output_path, resized_voxel_array)
+
+resize_voxel("dataset", 32)
+
