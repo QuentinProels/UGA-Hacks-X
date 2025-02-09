@@ -2,6 +2,7 @@ import trimesh
 import numpy as np
 import torch
 import os
+from vox2stl import exporter
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -9,7 +10,7 @@ print(f"GPU available: {torch.cuda.is_available()}")
 print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 # Directory containing STL files
 directory = "dataset"
-size = 16
+size = 32
 
 # List to store voxelized tensors
 tensor_list = []
@@ -116,7 +117,7 @@ def save_checkpoint(epoch, generator, discriminator, optimizer_G, optimizer_D):
         'optimizer_G_state_dict': optimizer_G.state_dict(),
         'optimizer_D_state_dict': optimizer_D.state_dict(),
     }
-    torch.save(checkpoint, checkpoint_path)
+    torch.save(checkpoint, checkpoint_path, _use_new_zipfile_serialization=False)
     print(f"Checkpoint saved at {checkpoint_path}")
 
 
@@ -133,7 +134,7 @@ def load_checkpoint(generator, discriminator, optimizer_G, optimizer_D):
     latest_epoch = int(latest_checkpoint.split("_")[-1].split(".")[0])
 
     checkpoint_path = os.path.join(save_dir, latest_checkpoint)
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = torch.load(checkpoint_path, map_location=device, _use_new_zipfile_serialization=False)
 
     generator.load_state_dict(checkpoint['generator_state_dict'])
     discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
@@ -199,7 +200,11 @@ def visualize_voxels(voxel_data):
 
     voxel_data = voxel_data.squeeze().detach().cpu().numpy()
     ax.voxels(voxel_data > 0.5, edgecolor='k')
+    
+    #exporter(voxel_data)
+    
     plt.show()
+
 
 # Generate a sample
 z = torch.randn(1, latent_dim)
