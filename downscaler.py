@@ -34,12 +34,3 @@ def resize_voxel(directory, output_size):
             resized_voxel_array = scipy.ndimage.zoom(voxel_array, scale_factor, order = 1)
             output_path = os.path.join(f"rescaled_{directory}", i)
             np.save(output_path, resized_voxel_array)
-             
-
-            
-
-
-
-
-resize_voxel("dataset", 32)
-resize_voxel("rescaled_dataset", 16)
