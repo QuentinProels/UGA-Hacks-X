@@ -30,7 +30,9 @@ for i in os.listdir(directory):
 
         # Convert mesh to voxel grid
 
-        voxel_array = np.load(file_path)  # Ensure float format
+        voxel_array = np.load(file_path).astype(np.float32)  # Ensure float32 format
+        voxel_array = (voxel_array * 2) - 1  # Normalize from [0,1] to [-1,1]
+
 
         # Check and pad/resize if necessary
         target_size = (size, size, size)  # Adjust based on your model
@@ -103,7 +105,7 @@ optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.99
 criterion = nn.BCELoss()
 
 # Training loop
-epochs = 1000
+epochs = 500
 batch_size = 16
 
 # Directory for saving models
@@ -198,6 +200,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 def visualize_voxels(voxel_data):
+    voxel_data = (voxel_data - voxel_data.min()) / (voxel_data.max() - voxel_data.min()) * 2 - 1
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
