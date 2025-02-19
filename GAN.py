@@ -49,7 +49,7 @@ for i in os.listdir(directory):
         tensor_list.append(tensor)
 
 # Convert list to a single tensor batch (N, 1, 32, 32, 32)
-voxel_data = torch.stack(tensor_list)
+voxel_data = torch.stack(tensor_list).to(device)
 print(f"Final tensor shape: {voxel_data.shape}")  # Expected: (num_samples, 1, 32, 32, 32)
 
 import torch.nn as nn
@@ -93,9 +93,10 @@ import torch.optim as optim
 # Set up models
 latent_dim = 200
 generator = Generator3D(latent_dim)
-#generator.to(device)
+generator.to(device)
 discriminator = Discriminator3D()
-#discriminator.to(device)
+discriminator.to(device)
+tensor = torch.randn(3,3).to(device)
 
 # Set up optimizers
 optimizer_G = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
@@ -105,7 +106,7 @@ optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.99
 criterion = nn.BCELoss()
 
 # Training loop
-epochs = 500
+epochs = 600
 batch_size = 16
 
 # Directory for saving models
@@ -165,16 +166,17 @@ else:
     batch_size = 16
     for epoch in range(start_epoch, epochs):
         # Sample random noise
-        z = torch.randn(batch_size, latent_dim)
+        z = torch.randn(batch_size, latent_dim).to(device)
         fake_data = generator(z)
         
         # Get real samples from dataset
-        real_data = voxel_data[:batch_size]  # Ensure enough data exists
+        real_data = voxel_data[:batch_size]
+        real_data = real_data.to(device)  # Ensure enough data exists
 
-        # Train Discriminator
+        # Train Discriminator   
         optimizer_D.zero_grad()
-        real_labels = torch.ones(batch_size, 1)
-        fake_labels = torch.zeros(batch_size, 1)
+        real_labels = torch.ones(batch_size, 1).to(device)
+        fake_labels = torch.zeros(batch_size, 1).to(device)
 
         real_loss = criterion(discriminator(real_data), real_labels)
         fake_loss = criterion(discriminator(fake_data.detach()), fake_labels)
@@ -213,7 +215,7 @@ def visualize_voxels(voxel_data):
 
 
 # Generate a sample
-z = torch.randn(1, latent_dim)
+z = torch.randn(1, latent_dim).to(device)
 generated_voxel = generator(z)
 visualize_voxels(generated_voxel)
 
