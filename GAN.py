@@ -5,13 +5,28 @@ import os
 from vox2stl import exporter
 from downscaler import resize_voxel
 
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+#function to visualize the voxels
+def visualize_voxels(voxel_data):
+    voxel_data = (voxel_data - voxel_data.min()) / (voxel_data.max() - voxel_data.min()) * 2 - 1
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+
+    voxel_data = voxel_data.squeeze().detach().cpu().numpy()
+    ax.voxels(voxel_data > 0.5, edgecolor='k')
+    
+    exporter(voxel_data)
+    
+    plt.show()
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 print(f"GPU available: {torch.cuda.is_available()}")
 print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 # Directory containing STL files
 directoryOne = "dataset"
-size = 32
+size = 64
 resize_voxel(directoryOne, size)
 directory = f"rescaled_{directoryOne}"
 
@@ -44,9 +59,11 @@ for i in os.listdir(directory):
             padded_array[:min_shape[0], :min_shape[1], :min_shape[2]] = voxel_array[:min_shape[0], :min_shape[1], :min_shape[2]]
             voxel_array = padded_array
 
+
         # Convert to PyTorch tensor
         tensor = torch.tensor(voxel_array).unsqueeze(0)  # Add channel dimension (1, 32, 32, 32)
         tensor_list.append(tensor)
+        visualize_voxels(tensor)
 
 # Convert list to a single tensor batch (N, 1, 32, 32, 32)
 voxel_data = torch.stack(tensor_list).to(device)
@@ -91,7 +108,7 @@ class Discriminator3D(nn.Module):
 import torch.optim as optim
 
 # Set up models
-latent_dim = 200
+latent_dim = 100
 generator = Generator3D(latent_dim)
 generator.to(device)
 discriminator = Discriminator3D()
@@ -100,18 +117,20 @@ tensor = torch.randn(3,3).to(device)
 
 # Set up optimizers
 optimizer_G = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
-optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
 
 # Loss function
 criterion = nn.BCELoss()
 
 # Training loop
-epochs = 600
-batch_size = 16
+epochs = 700
+batch_size = 8
 
 # Directory for saving models
 save_dir = "checkpoints"
 os.makedirs(save_dir, exist_ok=True)
+
+
 
 # Function to save the model state
 def save_checkpoint(epoch, generator, discriminator, optimizer_G, optimizer_D):
@@ -163,7 +182,6 @@ else:
     print(f"Starting training from epoch {start_epoch}...")
 
     # Training loop
-    batch_size = 16
     for epoch in range(start_epoch, epochs):
         # Sample random noise
         z = torch.randn(batch_size, latent_dim).to(device)
@@ -191,27 +209,18 @@ else:
         optimizer_G.step()
 
         if epoch % 100 == 0:
+            z = torch.randn(1, latent_dim).to(device)
+            generated_voxel = generator(z)
+            visualize_voxels(generated_voxel)
+
+        if epoch % 50 == 0:
             print(f"Epoch {epoch}: D Loss: {d_loss.item()}, G Loss: {g_loss.item()}")
             save_checkpoint(epoch, generator, discriminator, optimizer_G, optimizer_D)
-
     # Final checkpoint after completion
     save_checkpoint(epochs - 1, generator, discriminator, optimizer_G, optimizer_D)
     print("Training completed and final model saved!")
 
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
-def visualize_voxels(voxel_data):
-    voxel_data = (voxel_data - voxel_data.min()) / (voxel_data.max() - voxel_data.min()) * 2 - 1
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-
-    voxel_data = voxel_data.squeeze().detach().cpu().numpy()
-    ax.voxels(voxel_data > 0.5, edgecolor='k')
-    
-    exporter(voxel_data)
-    
-    plt.show()
 
 
 # Generate a sample
