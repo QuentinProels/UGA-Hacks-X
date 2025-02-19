@@ -2,6 +2,7 @@ import os
 import scipy.ndimage
 import numpy as np
 import cv2
+#not scaling one of the dimensions right now I presume to be the z axis
 def resize_voxel_cv(voxel_array, scale_factor):
 
     voxel_array = voxel_array.astype(np.float32)
@@ -37,7 +38,8 @@ def resize_voxel(directory, output_size):
             
             #print(f"File: {i}, Shape: { max_dim}")
     print (real_max_dimension)
-    scale_factor = output_size/real_max_dimension
+    scale_factor = (output_size/real_max_dimension)
+    print (scale_factor)
 
     for i in os.listdir(directory):
         if i.endswith(".npy"):

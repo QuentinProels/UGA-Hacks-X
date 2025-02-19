@@ -1,0 +1,2 @@
+the downscaler is only doing it for the x and y dimensions leaving the z dimension long which is what resulted in the 
+stls being cut off on the right and all of the files looking the same because when stretched they all looked the same.

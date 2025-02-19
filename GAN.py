@@ -4,6 +4,7 @@ import torch
 import os
 from vox2stl import exporter
 from downscaler import resize_voxel
+from vox_visualizer import visualize_the_voxel_goddamnit
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -26,7 +27,7 @@ print(f"GPU available: {torch.cuda.is_available()}")
 print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 # Directory containing STL files
 directoryOne = "dataset"
-size = 64
+size = 32
 resize_voxel(directoryOne, size)
 directory = f"rescaled_{directoryOne}"
 
@@ -61,8 +62,11 @@ for i in os.listdir(directory):
 
 
         # Convert to PyTorch tensor
-        tensor = torch.tensor(voxel_array).unsqueeze(0)  # Add channel dimension (1, 32, 32, 32)
+        print("about to visualize the voxel")
+        visualize_the_voxel_goddamnit(voxel_array)
+        tensor = torch.tensor(voxel_array) #.unsqueeze(0)  # Add channel dimension (1, 32, 32, 32)
         tensor_list.append(tensor)
+        print("about to visualize the tensor")
         visualize_voxels(tensor)
 
 # Convert list to a single tensor batch (N, 1, 32, 32, 32)
