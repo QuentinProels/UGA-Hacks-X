@@ -16,8 +16,13 @@ def resize_voxel_cv(voxel_array, scale_factor):
         cv2.resize(voxel_array[z], (new_shape[1], new_shape[2]), interpolation=cv2.INTER_CUBIC)
         for z in range(voxel_array.shape[0])
     ], axis=0)
-    
-    return resized_voxel
+
+    # Resize each slice (x-axis) individually
+    resized_voxel = np.stack ([
+        cv2.resize(voxel_array[:,y], (new_shape[0], new_shape[2]), interpolation=cv2.INTER_CUBIC)
+        for y in range(voxel_array.shape[1])
+    ], axis=0)    
+    return resized_voxel    
 
 def resize_voxel(directory, output_size):
     size = output_size

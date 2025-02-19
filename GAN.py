@@ -63,11 +63,11 @@ for i in os.listdir(directory):
 
         # Convert to PyTorch tensor
         print("about to visualize the voxel")
-        visualize_the_voxel_goddamnit(voxel_array)
-        tensor = torch.tensor(voxel_array) #.unsqueeze(0)  # Add channel dimension (1, 32, 32, 32)
+        #visualize_the_voxel_goddamnit(voxel_array)
+        tensor = torch.tensor(voxel_array).unsqueeze(0)  # Add channel dimension (1, 32, 32, 32)
         tensor_list.append(tensor)
         print("about to visualize the tensor")
-        visualize_voxels(tensor)
+        #visualize_voxels(tensor)
 
 # Convert list to a single tensor batch (N, 1, 32, 32, 32)
 voxel_data = torch.stack(tensor_list).to(device)
@@ -112,7 +112,7 @@ class Discriminator3D(nn.Module):
 import torch.optim as optim
 
 # Set up models
-latent_dim = 100
+latent_dim = 200
 generator = Generator3D(latent_dim)
 generator.to(device)
 discriminator = Discriminator3D()
