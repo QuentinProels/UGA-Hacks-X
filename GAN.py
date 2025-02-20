@@ -120,7 +120,7 @@ discriminator.to(device)
 tensor = torch.randn(3,3).to(device)
 
 # Set up optimizers
-optimizer_G = optim.Adam(generator.parameters(), lr=0.0002, betas=(0.5, 0.999))
+optimizer_G = optim.Adam(generator.parameters(), lr=0.0003, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
 
 # Loss function
@@ -128,7 +128,7 @@ criterion = nn.BCELoss()
 
 # Training loop
 epochs = 700
-batch_size = 8
+batch_size = 16
 
 # Directory for saving models
 save_dir = "checkpoints"

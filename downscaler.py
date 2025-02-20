@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 #not scaling one of the dimensions right now I presume to be the z axis
 def resize_voxel_cv(voxel_array, scale_factor):
-
+    '''
     voxel_array = voxel_array.astype(np.float32)
     # Rescale each dimension separately with cubic interpolation
     new_shape = (int(voxel_array.shape[0] * scale_factor), 
@@ -21,7 +21,11 @@ def resize_voxel_cv(voxel_array, scale_factor):
     resized_voxel = np.stack ([
         cv2.resize(voxel_array[:,y], (new_shape[0], new_shape[2]), interpolation=cv2.INTER_CUBIC)
         for y in range(voxel_array.shape[1])
-    ], axis=0)    
+    ], axis=0)
+    '''
+
+    resized_voxel =  scipy.ndimage.zoom(voxel_array, (scale_factor, scale_factor, scale_factor), order = 0)  
+    resized_voxel = np.clip(resized_voxel, 0, 1) 
     return resized_voxel    
 
 def resize_voxel(directory, output_size):
