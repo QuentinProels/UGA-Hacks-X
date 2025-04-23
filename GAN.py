@@ -5,6 +5,11 @@ import os
 from vox2stl import exporter
 from downscaler import resize_voxel
 from vox_visualizer import visualize_the_voxel_goddamnit
+import torch.optim as optim
+from mini_batch_dis import MiniBatchLayer
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.cuda.amp import autocast, GradScaler
+
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -27,7 +32,7 @@ print(f"GPU available: {torch.cuda.is_available()}")
 print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 # Directory containing STL files
 directoryOne = "dataset"
-size = 32
+size = 64
 resize_voxel(directoryOne, size)
 directory = f"rescaled_{directoryOne}"
 
@@ -95,18 +100,28 @@ class Generator3D(nn.Module):
 class Discriminator3D(nn.Module):
     def __init__(self):
         super(Discriminator3D, self).__init__()
-        self.model = nn.Sequential(
-            nn.Flatten(),
+        self.flatten = nn.Flatten(),
+        self.feature_extractor = nn.Sequential(
             nn.Linear(size * size * size, 1024),
             nn.LeakyReLU(0.2),
             nn.Linear(1024, 512),
             nn.LeakyReLU(0.2),
-            nn.Linear(512, 1),
-            nn.Sigmoid()  # Output probability of real/fake
         )
-
+        self.mini_batch_discriminator = MiniBatchLayer(size * size * size)
+        # combine 
+        self.final_layer = nn.Sequential(
+            nn.Linear(512 + 48, 1),
+            nn.Sigmoid()
+        )
     def forward(self, x):
-        return self.model(x)
+        x_batch_size = x.size(0)
+        x_flat = x.view(x_batch_size, -1)
+
+        features = self.feature_extractor(x_flat)
+        mb_features = self.mini_batch_discriminator(x)
+
+        combined_features = torch.cat([features, mb_features], dim=1)
+        return self.final_layer(combined_features)
 
 
 import torch.optim as optim
@@ -120,15 +135,23 @@ discriminator.to(device)
 tensor = torch.randn(3,3).to(device)
 
 # Set up optimizers
-optimizer_G = optim.Adam(generator.parameters(), lr=0.0003, betas=(0.5, 0.999))
+optimizer_G = optim.Adam(generator.parameters(), lr=0.00005, betas=(0.5, 0.999))
 optimizer_D = optim.Adam(discriminator.parameters(), lr=0.0001, betas=(0.5, 0.999))
+
+# setup schedulers
+scheduler_G = ReduceLROnPlateau(optimizer=optimizer_G, mode='min', factor=0.9, patience=100,verbose=True)
+scheduler_D = ReduceLROnPlateau(optimizer=optimizer_D, mode='min', factor=0.9, patience=100,verbose=True)
+
+# setup gradscaler
+scaler_G = GradScaler('cuda')
+scaler_D = GradScaler('cuda')
 
 # Loss function
 criterion = nn.BCELoss()
 
 # Training loop
 epochs = 700
-batch_size = 16
+batch_size = 48
 
 # Directory for saving models
 save_dir = "checkpoints"
@@ -197,7 +220,7 @@ else:
 
         # Train Discriminator   
         optimizer_D.zero_grad()
-        real_labels = torch.ones(batch_size, 1).to(device)
+        real_labels = torch.full((batch_size, 1), .09).to(device)
         fake_labels = torch.zeros(batch_size, 1).to(device)
 
         real_loss = criterion(discriminator(real_data), real_labels)
@@ -212,10 +235,15 @@ else:
         g_loss.backward()
         optimizer_G.step()
 
+        scheduler_G.step(g_loss.item())
+        scheduler_D.step(d_loss.item())
+
         if epoch % 100 == 0:
-            z = torch.randn(1, latent_dim).to(device)
-            generated_voxel = generator(z)
-            visualize_voxels(generated_voxel)
+            
+            with torch.no_grad():
+                z = torch.randn(1, latent_dim).to(device)
+                generated_voxel = generator(z)
+                visualize_voxels(generated_voxel)
 
         if epoch % 50 == 0:
             print(f"Epoch {epoch}: D Loss: {d_loss.item()}, G Loss: {g_loss.item()}")
@@ -228,7 +256,8 @@ else:
 
 
 # Generate a sample
-z = torch.randn(1, latent_dim).to(device)
-generated_voxel = generator(z)
-visualize_voxels(generated_voxel)
+with torch.no_grad():
+    z = torch.randn(1, latent_dim).to(device)
+    generated_voxel = generator(z)
+    visualize_voxels(generated_voxel)
 
